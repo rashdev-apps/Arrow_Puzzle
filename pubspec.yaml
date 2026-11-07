@@ -1,0 +1,53 @@
+name: arrow_puzzle
+description: Arrow Escape - a snake arrow maze puzzle game.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+  flutter: ^3.24.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.2.7
+  google_fonts: ^6.2.1
+  audioplayers: ^6.1.0
+  confetti: ^0.8.0
+  flutter_animate: ^4.5.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  equatable: ^2.0.5
+  collection: ^1.18.0
+  cupertino_icons: ^1.0.8
+  google_mobile_ads: ^9.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/levels/
+    - assets/shapes/
+    - assets/sounds/
+    - assets/images/
+    - assets/google_fonts/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "#F3EAD9"
+  adaptive_icon_foreground: "assets/images/app_icon_fg.png"
+
+flutter_native_splash:
+  color: "#F3EAD9"
+  image: "assets/images/app_icon.png"
+  android: true
+  ios: true

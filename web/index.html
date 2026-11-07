@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Arrow Escape - Tangle Puzzle Quest">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arrow Escape">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <title>Arrow Escape</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #F3EAD9;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #app-preloader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #F3EAD9;
+      z-index: 999999;
+      transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+    }
+
+    .preloader-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-wrapper {
+      position: relative;
+      width: 108px;
+      height: 108px;
+      margin-bottom: 24px;
+      border-radius: 26px;
+      background: #FFFFFF;
+      box-shadow: 0 12px 32px rgba(107, 74, 58, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      animation: gentle-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    .game-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 26px;
+    }
+
+    .game-title {
+      color: #6B4A3A;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 3.5px;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+      opacity: 0;
+      animation: fade-up 0.6s ease-out 0.2s forwards;
+    }
+
+    .game-subtitle {
+      color: #A08272;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.2px;
+      margin: 0 0 36px 0;
+      text-transform: uppercase;
+      opacity: 0;
+      animation: fade-up 0.6s ease-out 0.35s forwards;
+    }
+
+    .progress-box {
+      width: 160px;
+      opacity: 0;
+      animation: fade-up 0.6s ease-out 0.45s forwards;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 5px;
+      background: #E8DCC8;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 35%;
+      background: #6B4A3A;
+      border-radius: 10px;
+      animation: progress-loop 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .loading-hint {
+      color: #8D6E63;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    @keyframes gentle-pop {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes fade-up {
+      0% { transform: translateY(12px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes progress-loop {
+      0% { left: -35%; width: 35%; }
+      50% { left: 30%; width: 50%; }
+      100% { left: 100%; width: 35%; }
+    }
+  </style>
+
+  <script>
+    function removeSplashFromWeb() {
+      const loader = document.getElementById("app-preloader");
+      if (loader) {
+        loader.style.opacity = "0";
+        loader.style.pointerEvents = "none";
+        setTimeout(() => loader.remove(), 400);
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app-preloader">
+    <div class="preloader-card">
+      <div class="logo-wrapper">
+        <img class="game-logo" src="assets/images/app_icon.png" alt="Arrow Escape" onerror="this.src='icons/Icon-192.png'">
+      </div>
+      <h1 class="game-title">Arrow Escape</h1>
+      <p class="game-subtitle">Tangle Puzzle Quest</p>
+      <div class="progress-box">
+        <div class="progress-track">
+          <div class="progress-bar"></div>
+        </div>
+        <span class="loading-hint">Loading game...</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

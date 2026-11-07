@@ -1,0 +1,12 @@
+{
+ "count": 10,
+ "seedScheme": "fnv1a64(\"arrowpuzzle:<levelId>\")",
+ "chapters": [
+  {
+   "index": 0,
+   "name": "Square Shapes",
+   "shape": "square",
+   "firstLevel": 1
+  }
+ ]
+}
