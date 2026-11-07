@@ -93,50 +93,62 @@ class MemoryStorageService implements StorageService {
   set dailyStreak(int v) => _profile['daily_streak'] = v;
 
   @override
-  int? starsFor(int levelId) => _progress['stars_$levelId'] as int?;
-  @override
-  void setStars(int levelId, int stars) => _progress['stars_$levelId'] = stars;
+  int starsForDaily(String date) => _get(_profile, 'daily_$date', 0);
 
   @override
-  int? bestTimeFor(int levelId) => _progress['time_$levelId'] as int?;
-  @override
-  void setBestTime(int levelId, int seconds) =>
-      _progress['time_$levelId'] = seconds;
+  void setDailyStars(String date, int stars) =>
+      _profile['daily_$date'] = stars;
 
   @override
-  int get maxUnlockedLevel => _get(_progress, 'max_unlocked', 1);
-  @override
-  set maxUnlockedLevel(int v) => _progress['max_unlocked'] = v;
+  int starsForLevel(int levelId) => _get(_progress, 'stars_$levelId', 0);
 
   @override
-  bool get hasSavedGame => _state['saved_game'] != null;
-
-  @override
-  Map<String, dynamic>? getSavedGame() {
-    final v = _state['saved_game'];
-    if (v is Map) {
-      return Map<String, dynamic>.from(v);
+  void setLevelStars(int levelId, int stars) {
+    if (stars > starsForLevel(levelId)) {
+      _progress['stars_$levelId'] = stars;
     }
+  }
+
+  @override
+  int? bestTimeForLevel(int levelId) => _progress['best_time_$levelId'] as int?;
+
+  @override
+  void setBestTimeForLevel(int levelId, int seconds) {
+    final current = bestTimeForLevel(levelId);
+    if (current == null || seconds < current) {
+      _progress['best_time_$levelId'] = seconds;
+    }
+  }
+
+  @override
+  bool isLevelUnlocked(int levelId) {
+    if (levelId <= 1) return true;
+    return starsForLevel(levelId - 1) > 0;
+  }
+
+  @override
+  Map<String, dynamic>? savedLevelState(int levelId) {
+    final raw = _state['level_$levelId'];
+    if (raw is Map) return raw.cast<String, dynamic>();
     return null;
   }
 
   @override
-  void saveGame(Map<String, dynamic> serialized) {
-    _state['saved_game'] = serialized;
+  void saveLevelState(int levelId, Map<String, dynamic> state) {
+    _state['level_$levelId'] = state;
   }
 
   @override
-  void clearSavedGame() {
-    _state.remove('saved_game');
+  void clearLevelState(int levelId) {
+    _state.remove('level_$levelId');
   }
 
   @override
-  void wipeAll() {
-    _settings.clear();
+  Future<void> resetProgress() async {
     _profile.clear();
-    _profile['coins'] = 60;
-    _profile['owned_themes'] = ['classic', 'dark'];
     _progress.clear();
     _state.clear();
+    coins = 60;
+    ownedThemes = ['classic', 'dark'];
   }
 }
