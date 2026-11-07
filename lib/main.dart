@@ -8,6 +8,8 @@ import 'core/ads/ad_service.dart';
 import 'core/audio/audio_service.dart';
 import 'core/providers.dart';
 import 'core/storage/hive_storage_service.dart';
+import 'core/storage/memory_storage_service.dart';
+import 'core/storage/storage_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,13 +24,13 @@ Future<void> main() async {
     debugPrint('Orientation setup error: $e');
   }
 
-  // Safe storage initialization
-  late final HiveStorageService storage;
+  // Safe storage initialization with foolproof fallback
+  StorageService storage;
   try {
     storage = await HiveStorageService.init();
   } catch (e) {
-    debugPrint('Storage init error: $e');
-    storage = await HiveStorageService.init();
+    debugPrint('Storage init error, using MemoryStorage: $e');
+    storage = MemoryStorageService();
   }
 
   // Safe audio initialization
