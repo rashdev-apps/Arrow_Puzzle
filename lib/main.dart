@@ -33,22 +33,16 @@ Future<void> main() async {
     storage = MemoryStorageService();
   }
 
-  // Safe audio initialization
+  // Safe audio initialization (lazy preload)
   final audio = AudioService();
   try {
     audio.enabled = storage.soundOn;
-    await audio.preload();
   } catch (e) {
-    debugPrint('Audio preload error: $e');
+    debugPrint('Audio setup error: $e');
   }
 
   // AdMob initialized in background with error handling so it cannot crash startup
   final adService = AdMobService();
-  unawaited(
-    adService.initialize().catchError((e) {
-      debugPrint('AdMob init error: $e');
-    }),
-  );
 
   runApp(
     ProviderScope(
@@ -60,4 +54,10 @@ Future<void> main() async {
       child: const ArrowPuzzleApp(),
     ),
   );
+
+  // Background initialization of audio & ads after first frame
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(audio.preload().catchError((e) => debugPrint('Audio preload error: $e')));
+    unawaited(adService.initialize().catchError((e) => debugPrint('AdMob init error: $e')));
+  });
 }
