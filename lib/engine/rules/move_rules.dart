@@ -1,8 +1,8 @@
 import 'package:equatable/equatable.dart';
 
-import 'board.dart';
-import 'direction.dart';
-import 'grid_cell.dart';
+import '../models/board.dart';
+import '../models/direction.dart';
+import '../models/grid_cell.dart';
 
 sealed class MoveOutcome extends Equatable {
   const MoveOutcome();
@@ -76,3 +76,4 @@ class MoveRules {
     return testMove(board, remaining, arrowId) is ValidMove;
   }
 }
+

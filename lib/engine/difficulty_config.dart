@@ -105,3 +105,4 @@ class DifficultyConfig {
     return 1;
   }
 }
+

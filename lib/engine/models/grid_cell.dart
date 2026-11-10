@@ -32,3 +32,4 @@ class GridCell extends Equatable {
   @override
   String toString() => '($row,$col)';
 }
+

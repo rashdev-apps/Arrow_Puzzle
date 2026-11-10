@@ -2,7 +2,8 @@ import 'package:equatable/equatable.dart';
 
 import '../difficulty_config.dart';
 import '../metrics/puzzle_metrics.dart';
-import '../models/board.dart';
+import 'arrow.dart';
+import 'board.dart';
 import '../silhouette/silhouette_mask.dart';
 
 class Level extends Equatable {
@@ -92,3 +93,4 @@ class Level extends Equatable {
   @override
   List<Object?> get props => [id, seed, board, silhouetteFamily, solution];
 }
+

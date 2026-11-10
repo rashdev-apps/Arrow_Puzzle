@@ -373,3 +373,4 @@ class SilhouetteGenerator {
     return clean;
   }
 }
+

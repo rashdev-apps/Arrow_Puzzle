@@ -90,3 +90,4 @@ class Arrow extends Equatable {
   @override
   List<Object?> get props => [id, path, dir];
 }
+

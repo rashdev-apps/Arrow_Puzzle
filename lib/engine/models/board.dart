@@ -41,6 +41,27 @@ class Board extends Equatable {
     return map;
   }
 
+  /// Returns all arrows that are currently free to slide out given [remaining] set of arrows
+  List<Arrow> freeArrows(Set<String> remaining) {
+    final occ = occupancy;
+    final free = <Arrow>[];
+    for (final a in arrows) {
+      if (!remaining.contains(a.id)) continue;
+      var canExit = true;
+      for (final cell in exitRay(a)) {
+        final other = occ[cell];
+        if (other != null && other.id != a.id && remaining.contains(other.id)) {
+          canExit = false;
+          break;
+        }
+      }
+      if (canExit) {
+        free.add(a);
+      }
+    }
+    return free;
+  }
+
   /// Ray of cells from immediately past the head to the board boundary
   List<GridCell> exitRay(Arrow arrow) {
     final ray = <GridCell>[];
@@ -65,3 +86,4 @@ class Board extends Equatable {
   @override
   List<Object?> get props => [rows, cols, mask, arrows];
 }
+

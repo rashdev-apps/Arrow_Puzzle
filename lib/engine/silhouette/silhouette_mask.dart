@@ -76,3 +76,4 @@ class SilhouetteMask {
     return mask;
   }
 }
+
