@@ -29,10 +29,21 @@ class AppThemeData {
 const List<AppThemeData> kAppThemes = [
   AppThemeData(
     id: 'classic',
-    name: 'Classic Cream',
+    name: 'Modern Clean',
     coinCost: 0,
-    background: Color(0xFFF3EAD9),
-    arrowColor: Color(0xFF6B4A3A),
+    background: Color(0xFFFFFFFF),
+    arrowColor: Color(0xFF0F172A), // Crisp navy/dark slate like reference
+    arrowBlocked: Color(0xFFEF4444), // Vibrant red flash
+    arrowHint: Color(0xFF3B82F6), // Vibrant blue highlight
+    surface: Color(0xFFF8FAFC),
+    textColor: Color(0xFF0F172A),
+  ),
+  AppThemeData(
+    id: 'cream',
+    name: 'Warm Cream',
+    coinCost: 0,
+    background: Color(0xFFF4ECE1),
+    arrowColor: Color(0xFF4A3428),
     arrowBlocked: Color(0xFFE53935),
     arrowHint: Color(0xFF2D9CFF),
     surface: Color(0xFFFFFFFF),

@@ -29,15 +29,15 @@ abstract final class DesignTokens {
   static final BorderRadius br24 = BorderRadius.circular(r24);
   static final BorderRadius brPill = BorderRadius.circular(rPill);
 
-  // ---- Palette (Light / Classic) --------------------------------------------
-  static const Color creamBg = Color(0xFFF3EAD9);
-  static const Color creamSurface = Color(0xFFFBF6EC);
+  // ---- Palette (Light / Modern Clean) --------------------------------------
+  static const Color creamBg = Color(0xFFFFFFFF); // Pure clean white as in reference
+  static const Color creamSurface = Color(0xFFF8FAFC);
   static const Color creamCard = Color(0xFFFFFFFF);
 
-  static const Color brownPrimary = Color(0xFF6B4A3A);
-  static const Color brownDark = Color(0xFF3B2A22);
-  static const Color brownMuted = Color(0xFF8A7466);
-  static const Color brownLight = Color(0xFFD7C4B2);
+  static const Color brownPrimary = Color(0xFF0F172A); // Deep navy/slate arrow stroke
+  static const Color brownDark = Color(0xFF020617);
+  static const Color brownMuted = Color(0xFF64748B);
+  static const Color brownLight = Color(0xFFE2E8F0);
 
   static const Color accentAmber = Color(0xFFE8A33D);
   static const Color accentGold = Color(0xFFF4B942);

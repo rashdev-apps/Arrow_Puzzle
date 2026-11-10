@@ -97,7 +97,8 @@ class BoardPainter extends CustomPainter {
       colorblind ? ColorblindHighlights.blocked : theme.arrowBlocked;
   Color get _hintColor => colorblind ? ColorblindHighlights.hint : theme.arrowHint;
 
-  double get strokeWidth => (cellSize * 0.15).clamp(2.5, 9.0);
+  // Stroke width ratio calibrated to reference: bold, crisp, rounded
+  double get strokeWidth => (cellSize * 0.18).clamp(3.0, 10.0);
 
   Offset _center(GridCell c) =>
       Offset((c.col + 0.5) * cellSize, (c.row + 0.5) * cellSize);
@@ -119,23 +120,8 @@ class BoardPainter extends CustomPainter {
   }
 
   void _paintMask(Canvas canvas) {
-    // Dot grid architecture:
-    // Instead of drawing square bounding boxes, draw subtle circular grid dots at every cell center.
-    // This allows arrows to float elegantly on a clean dot matrix canvas with higher density.
-    final dotPaint = Paint()
-      ..color = theme.arrowColor.withValues(alpha: 0.16)
-      ..style = PaintingStyle.fill;
-
-    final dotRadius = (cellSize * 0.08).clamp(1.5, 3.5);
-
-    for (var r = 0; r < board.rows; r++) {
-      for (var c = 0; c < board.cols; c++) {
-        if (board.mask[r * board.cols + c]) {
-          final center = _center(GridCell(r, c));
-          canvas.drawCircle(center, dotRadius, dotPaint);
-        }
-      }
-    }
+    // Crisp clean canvas matching reference screenshot:
+    // Pure white canvas with no noisy background boxes or heavy dots so the maze lines pop sharply.
   }
 
   void _paintBlockedRay(Canvas canvas) {

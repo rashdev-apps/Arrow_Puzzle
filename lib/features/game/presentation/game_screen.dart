@@ -297,15 +297,18 @@ class _TopBar extends ConsumerWidget {
     final game = ref.watch(gameProvider(level.id));
     final profile = ref.watch(profileProvider);
 
+    final tier = level.tier;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+      child: Column(
         children: [
+          // Top line: [ < ]  Title ("Level X" or Date)  [ ⚙ ]
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: DesignTokens.brownPrimary),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF2563EB), size: 22),
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();
@@ -314,50 +317,82 @@ class _TopBar extends ConsumerWidget {
                   }
                 },
               ),
-              const SizedBox(width: 4),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    daily ? 'Daily Challenge' : 'Level ${level.id}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: DesignTokens.brownDark,
-                    ),
-                  ),
-                  if (!daily) DifficultyChip(level: level.id),
-                ],
+              Text(
+                daily ? LevelRepository.dailyKeyString(DateTime.now()) : 'Level ${level.id}',
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Color(0xFF2563EB), size: 24),
+                onPressed: () => context.push('/settings'),
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          // Sub-bar row: [ 🏹 Count ]   [ ❤️ ❤️ ❤️ ]   [ Mode/Difficulty Pill ]
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Hearts
+              // Arrow count badge pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.navigation_rounded, size: 14, color: Color(0xFF475569)),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${level.arrowCount}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Hearts in center
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < AppConstants.heartsPerLevel; i++)
                     Padding(
-                      padding: const EdgeInsets.only(right: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
                       child: Icon(
                         i < game.hearts
                             ? Icons.favorite_rounded
                             : Icons.favorite_border_rounded,
-                        size: 22,
+                        size: 26,
                         color: i < game.hearts
-                            ? DesignTokens.errorRed
-                            : DesignTokens.brownMuted.withAlpha(80),
+                            ? const Color(0xFFEF4444)
+                            : const Color(0xFFCBD5E1),
                       ),
                     ),
                 ],
               ),
-              const SizedBox(width: 8),
-              StatChip(
-                icon: Icons.monetization_on_rounded,
-                iconColor: DesignTokens.accentGold,
-                text: '${profile.coins}',
-                onTap: () => context.push('/shop'),
+              // Difficulty / Mode chip pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  tier.label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
               ),
             ],
           ),
@@ -385,28 +420,91 @@ class _BottomBar extends ConsumerWidget {
     final totalLeft = (AdConfig.maxHintsPerLevel - hintsUsed).clamp(0, AdConfig.maxHintsPerLevel);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _ActionButton(
-            icon: Icons.lightbulb_rounded,
-            label: 'Hint ($totalLeft left)',
-            badge: 'AD',
-            color: DesignTokens.hintBlue,
-            onTap: totalLeft > 0 ? onHint : () {},
+          // Circular hint button matching reference design (lightbulb with subtle blue glow and Ad badge)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
+                onTap: totalLeft > 0 ? onHint : () {},
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withValues(alpha: 0.15),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text('💡', style: TextStyle(fontSize: 26)),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -3,
+                right: -3,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B82F6),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: const Text(
+                    'Ad',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          _ActionButton(
-            icon: Icons.undo_rounded,
-            label: 'Undo',
-            color: DesignTokens.brownPrimary,
+          const SizedBox(width: 32),
+          // Circular undo button matching reference design (eraser/ruler icon with soft purple/slate shadow)
+          GestureDetector(
             onTap: onUndo,
-          ),
-          _ActionButton(
-            icon: Icons.restart_alt_rounded,
-            label: 'Restart',
-            color: DesignTokens.brownDark,
-            onTap: onRestart,
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.deepPurple.withValues(alpha: 0.12),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text('📏', style: TextStyle(fontSize: 24)),
+              ),
+            ),
           ),
         ],
       ),
