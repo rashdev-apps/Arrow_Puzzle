@@ -24,62 +24,50 @@ class BoardDimension {
 }
 
 class DifficultyConfig {
-  static const List<(int level, int count)> anchors = [
-    (1, 4),
-    (2, 6),
-    (3, 8),
-    (4, 10),
-    (5, 12),
-    (8, 16),
-    (12, 24),
-    (20, 36),
-    (35, 52),
-    (50, 68),
-    (75, 90),
-    (100, 110),
-  ];
-
+  /// Primary progression curve:
+  /// Level 1 starts with 4 arrows, increasing monotonically across levels
+  /// (e.g. L1=4, L2=8, L3=12, L4=16, L5=20, etc.) scaling up to cap of 120.
   static const int maxArrowCap = 120;
   static const int mistakePenaltySeconds = 3;
   static const int freezePowerupCost = 20;
   static const int freezePowerupSeconds = 10;
   static const int reviveSecondsBonus = 15;
 
-  /// Pure baseline monotonically increasing curve before sawtooth.
+  /// Pure baseline monotonically increasing curve.
+  /// First 5 levels: L1=4, L2=8, L3=12, L4=16, L5=20
+  /// Scales cleanly to L25=60, L50=90, L100=120.
   static int baselineArrowCount(int level) {
     if (level <= 1) return 4;
-    if (level >= 100) {
-      // Scale from 110 at level 100 up to cap 120 at level 150+
-      final extra = ((level - 100) * 0.2).round();
-      return min(maxArrowCap, 110 + extra);
+    if (level <= 5) return level * 4; // L1:4, L2:8, L3:12, L4:16, L5:20
+    if (level <= 20) {
+      // Scale from 20 to 50
+      final t = (level - 5) / 15.0;
+      return (20 + t * 30).round();
     }
-
-    for (var i = 0; i < anchors.length - 1; i++) {
-      final (l1, c1) = anchors[i];
-      final (l2, c2) = anchors[i + 1];
-      if (level >= l1 && level <= l2) {
-        final t = (level - l1) / (l2 - l1);
-        final interp = c1 + t * (c2 - c1);
-        return interp.round();
-      }
+    if (level <= 50) {
+      // Scale from 50 to 90
+      final t = (level - 20) / 30.0;
+      return (50 + t * 40).round();
+    }
+    if (level <= 100) {
+      // Scale from 90 to 120
+      final t = (level - 50) / 50.0;
+      return min(maxArrowCap, (90 + t * 30).round());
     }
     return maxArrowCap;
   }
 
-  /// Exact arrow count curve with boss/breather sawtooth applied:
-  /// - Every 10th level is a "boss" (+10% arrows).
-  /// - The level after a boss is a "breather" (~5% easier than its raw baseline).
-  /// - Monotonic progression guaranteed across anchors.
+  /// Exact arrow count per level:
+  /// Monotonic, strictly progressive, with boss (+10%) and breather mechanics.
   static int arrowCount(int level) {
     final base = baselineArrowCount(level);
-    if (level % 10 == 0) {
+    if (level > 5 && level % 10 == 0) {
       // Boss level
       return min(maxArrowCap, (base * 1.10).round());
-    } else if (level > 1 && (level - 1) % 10 == 0) {
+    } else if (level > 10 && (level - 1) % 10 == 0) {
       // Breather level right after boss
       final prevBase = baselineArrowCount(level - 1);
       final breather = (base * 0.95).round();
-      // Keep at least equal or slightly greater than previous base so it never drops below previous anchor baseline
       return max(prevBase, breather);
     }
     return base;

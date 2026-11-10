@@ -119,22 +119,20 @@ class BoardPainter extends CustomPainter {
   }
 
   void _paintMask(Canvas canvas) {
-    final paint = Paint()..color = theme.arrowColor.withValues(alpha: 0.05);
+    // Dot grid architecture:
+    // Instead of drawing square bounding boxes, draw subtle circular grid dots at every cell center.
+    // This allows arrows to float elegantly on a clean dot matrix canvas with higher density.
+    final dotPaint = Paint()
+      ..color = theme.arrowColor.withValues(alpha: 0.16)
+      ..style = PaintingStyle.fill;
+
+    final dotRadius = (cellSize * 0.08).clamp(1.5, 3.5);
+
     for (var r = 0; r < board.rows; r++) {
       for (var c = 0; c < board.cols; c++) {
         if (board.mask[r * board.cols + c]) {
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(
-              Rect.fromLTWH(
-                c * cellSize + cellSize * 0.08,
-                r * cellSize + cellSize * 0.08,
-                cellSize * 0.84,
-                cellSize * 0.84,
-              ),
-              Radius.circular(cellSize * 0.18),
-            ),
-            paint,
-          );
+          final center = _center(GridCell(r, c));
+          canvas.drawCircle(center, dotRadius, dotPaint);
         }
       }
     }

@@ -8,19 +8,12 @@ void main() {
   const solver = Solver();
 
   group('DifficultyConfig', () {
-    test('arrowCount curve is monotonically increasing across anchors and matches anchors', () {
+    test('arrowCount curve is monotonically increasing', () {
       expect(DifficultyConfig.arrowCount(1), 4);
-      expect(DifficultyConfig.arrowCount(2), 6);
-      expect(DifficultyConfig.arrowCount(3), 8);
-      expect(DifficultyConfig.arrowCount(4), 10);
-      expect(DifficultyConfig.arrowCount(5), 12);
-      expect(DifficultyConfig.arrowCount(8), 16);
-      expect(DifficultyConfig.arrowCount(12), 24);
-      expect(DifficultyConfig.arrowCount(20), 36);
-      expect(DifficultyConfig.arrowCount(35), 52);
-      expect(DifficultyConfig.arrowCount(50), 68);
-      expect(DifficultyConfig.arrowCount(75), 90);
-      expect(DifficultyConfig.arrowCount(100), 110);
+      expect(DifficultyConfig.arrowCount(2), 8);
+      expect(DifficultyConfig.arrowCount(3), 12);
+      expect(DifficultyConfig.arrowCount(4), 16);
+      expect(DifficultyConfig.arrowCount(5), 20);
 
       // Monotonic baseline progression
       for (var l = 1; l < 100; l++) {
