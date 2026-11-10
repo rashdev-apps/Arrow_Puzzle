@@ -146,7 +146,17 @@ class HiveStorageService implements StorageService {
   @override
   bool isLevelUnlocked(int levelId) {
     if (levelId <= 1) return true;
-    return starsForLevel(levelId - 1) > 0;
+    return levelId <= maxUnlockedLevel || starsForLevel(levelId - 1) > 0;
+  }
+
+  @override
+  int get maxUnlockedLevel => _progress.get('max_unlocked', defaultValue: 1) as int;
+
+  @override
+  set maxUnlockedLevel(int v) {
+    if (v > maxUnlockedLevel) {
+      _progress.put('max_unlocked', v);
+    }
   }
 
 

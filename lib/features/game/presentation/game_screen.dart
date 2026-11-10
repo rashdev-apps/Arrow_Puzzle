@@ -62,7 +62,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
       timerNotifier.pause();
     } else if (state == AppLifecycleState.resumed) {
       final game = ref.read(gameProvider(_gameId));
-      if (game.status == GameStatus.inProgress && game.movesTaken > 0) {
+      if (game.status == GameStatus.playing &&
+          game.remaining.length < game.level.board.arrows.length) {
         timerNotifier.resume();
       }
     }
@@ -202,7 +203,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         final timerState = ref.watch(levelTimerProvider(gameId));
         if (timerState.isTimeUp && !_winHandled) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref.read(gameProvider(gameId).notifier).failByTimeout();
+            ref.read(gameProvider(gameId).notifier).handleTimeout();
           });
         }
 
@@ -212,8 +213,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
             timerNotifier.pause();
 
             final relaxed = ref.read(settingsProvider).relaxedMode;
-            ref.read(gameProvider(gameId).notifier).computeStars(
-                  elapsedSeconds: timerState.elapsedSeconds,
+            ref.read(gameProvider(gameId).notifier).finalizeWin(
+                  timeLeftSeconds: timerState.remainingSeconds,
                   limitSeconds: timerState.totalLimitSeconds,
                   relaxedMode: relaxed,
                 );

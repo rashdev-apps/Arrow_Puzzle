@@ -61,6 +61,9 @@ abstract interface class StorageService {
 
   bool isLevelUnlocked(int levelId);
 
+  int get maxUnlockedLevel;
+  set maxUnlockedLevel(int v);
+
   // ---- In-progress level state (resume) -----------------------------------
   Map<String, dynamic>? savedLevelState(int levelId);
   void saveLevelState(int levelId, Map<String, dynamic> state);

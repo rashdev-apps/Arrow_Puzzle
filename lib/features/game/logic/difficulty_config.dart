@@ -40,6 +40,10 @@ class DifficultyConfig {
   ];
 
   static const int maxArrowCap = 120;
+  static const int mistakePenaltySeconds = 3;
+  static const int freezePowerupCost = 20;
+  static const int freezePowerupSeconds = 10;
+  static const int reviveSecondsBonus = 15;
 
   /// Pure baseline monotonically increasing curve before sawtooth.
   static int baselineArrowCount(int level) {
@@ -159,6 +163,26 @@ class DifficultyConfig {
     if (level <= 20) return 4;
     return 6;
   }
+
+  /// Calculates stars earned (1..3) based on mistakes and time left
+  static int computeStars({
+    required int mistakes,
+    required int timeLeftSeconds,
+    required int limitSeconds,
+    required bool relaxedMode,
+  }) {
+    if (mistakes > 2) return 1;
+    if (relaxedMode || limitSeconds <= 0) {
+      if (mistakes == 0) return 3;
+      if (mistakes <= 1) return 2;
+      return 1;
+    }
+    // With timer active:
+    final timeRatio = timeLeftSeconds / limitSeconds;
+    if (mistakes == 0 && timeRatio >= 0.3) return 3;
+    if (mistakes <= 1 && timeRatio >= 0.1) return 2;
+    return 1;
+  }
 }
 
 /// Comprehensive quality and difficulty metrics computed for any board.
@@ -238,45 +262,38 @@ class BoardQualityMetrics {
       );
     }
 
-    final occupiedCount = board.occupiedCount;
-    final activeCount = board.activeCellCount;
+    final occupiedCount = board.arrows.fold<int>(0, (sum, a) => sum + a.path.length);
+    final activeCount = board.mask.where((m) => m).length;
     final coverage = activeCount == 0 ? 0.0 : occupiedCount / activeCount;
 
-    int turns = 0;
-    for (final a in arrows) {
-      turns += a.bendCount;
-    }
-    final windingRatio = turns / N;
+    final analysis = solver.analyze(board);
+    final isSolvable = analysis.isSolvable;
+    final longestChain = analysis.longestChain;
+    final depthRatio = longestChain / N;
 
-    final freeAtStart = arrows.where((a) => solver.canEscape(board, a)).length;
+    final freeAtStart = analysis.freeAtStart;
     final free0Ratio = freeAtStart / N;
 
     int totalRayBlockers = 0;
     int multiBlockerCount = 0;
-    for (final a in arrows) {
-      final blockers = solver.countRayBlockers(board, a);
+    int decoyCount = 0;
+
+    for (final entry in analysis.dependencyGraph.entries) {
+      final blockers = entry.value.length;
       totalRayBlockers += blockers;
       if (blockers >= 2) multiBlockerCount++;
+      if (blockers == 1) decoyCount++;
     }
+
     final avgRayBlockers = totalRayBlockers / N;
     final multiBlockerRatio = multiBlockerCount / N;
 
-    final solution = solver.solveWithConcurrency(board);
-    final isSolvable = solution != null;
-
-    final maxFreeWave = solution?.maxWaveWidth ?? freeAtStart;
+    // Estimate winding ratio from average arrow path length
+    final windingRatio = (analysis.averagePathLength - 1.0).clamp(0.0, 5.0);
+    final maxFreeWave = freeAtStart;
     final maxFreeWaveRatio = maxFreeWave / N;
-    final avgFree = solution?.avgFreePerStep ?? freeAtStart.toDouble();
-    final longestChain = solution?.longestChain ?? 0;
-    final depthRatio = longestChain / N;
-    final isForcedOrder = solution?.isForcedOrder ?? false;
-
-    int decoyCount = 0;
-    for (final a in arrows) {
-      if (solver.canEscape(board, a)) continue;
-      final blockers = solver.countRayBlockers(board, a);
-      if (blockers == 1) decoyCount++;
-    }
+    final avgFree = freeAtStart.toDouble();
+    final isForcedOrder = freeAtStart <= 3;
 
     final score = (depthRatio * 35.0) +
         ((1.0 - (maxFreeWaveRatio.clamp(0.0, 1.0))) * 25.0) +

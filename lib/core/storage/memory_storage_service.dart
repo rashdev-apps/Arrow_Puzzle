@@ -123,7 +123,17 @@ class MemoryStorageService implements StorageService {
   @override
   bool isLevelUnlocked(int levelId) {
     if (levelId <= 1) return true;
-    return starsForLevel(levelId - 1) > 0;
+    return levelId <= maxUnlockedLevel || starsForLevel(levelId - 1) > 0;
+  }
+
+  @override
+  int get maxUnlockedLevel => _get(_progress, 'max_unlocked', 1);
+
+  @override
+  set maxUnlockedLevel(int v) {
+    if (v > maxUnlockedLevel) {
+      _progress['max_unlocked'] = v;
+    }
   }
 
   @override

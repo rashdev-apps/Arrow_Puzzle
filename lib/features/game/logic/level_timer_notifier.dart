@@ -57,6 +57,12 @@ class TimerState {
       totalLimitSeconds > 0 ? (remainingSeconds / totalLimitSeconds).clamp(0.0, 1.0) : 1.0;
   bool get isWarning => fractionRemaining <= 0.30;
   bool get isCritical => fractionRemaining <= 0.15;
+
+  int get elapsedSeconds => totalLimitSeconds > 0
+      ? (totalLimitSeconds - remainingSeconds).clamp(0, totalLimitSeconds)
+      : (elapsedMilliseconds / 1000).floor();
+
+  bool get isTimeUp => isTimeout || (totalLimitSeconds > 0 && remainingSeconds <= 0);
 }
 
 class LevelTimerNotifier extends StateNotifier<TimerState> {

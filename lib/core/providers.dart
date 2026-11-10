@@ -206,6 +206,11 @@ class ProfileNotifier extends StateNotifier<ProfileState> {
     refresh();
   }
 
+  void recordLevelCompleted(int stars) {
+    _storage.levelsCompleted = _storage.levelsCompleted + 1;
+    refresh();
+  }
+
   bool unlockTheme(String themeId, int cost) {
     if (_storage.ownedThemes.contains(themeId)) return true;
     if (!spendCoins(cost)) return false;

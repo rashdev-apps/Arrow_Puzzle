@@ -38,7 +38,7 @@ class Level extends Equatable {
 
   int get effectiveTimeLimitSeconds =>
       timeLimitSeconds ??
-      DifficultyConfig.computeTimeLimitSeconds(arrowCount, id);
+      (DifficultyConfig.computeTimeLimitSeconds(arrowCount, id) ?? 0);
 
   Map<String, dynamic> toJson() => {
         'id': id,
