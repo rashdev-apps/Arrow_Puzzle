@@ -12,34 +12,55 @@ enum DifficultyTier {
 }
 
 class DifficultyConfig {
-  static const int maxArrowCap = 220;
+  static const int maxArrowCap = 250;
   static const int mistakePenaltySeconds = 3;
   static const int freezePowerupCost = 20;
   static const int freezePowerupSeconds = 10;
   static const int reviveSecondsBonus = 15;
 
+  /// High-volume difficulty target ranges:
+  /// - Test levels 1-6: Heart (30), Dog (50), Cat (60), Elephant (80), Butterfly (100), Maze (120)
+  /// - Beginner (L1-15): 20–35 arrows
+  /// - Easy (L16-30): 35–55 arrows
+  /// - Medium (L31-50): 55–85 arrows
+  /// - Hard (L51-70): 85–125 arrows
+  /// - Expert (L71-100): 125–180 arrows
+  /// - Master (L101+): 180–250 arrows
   static const List<(int level, int count)> anchors = [
-    (1, 4),
-    (2, 6),
-    (3, 8),
-    (5, 12),
-    (8, 16),
-    (12, 24),
-    (20, 36),
-    (35, 56),
-    (50, 80),
-    (75, 110),
-    (100, 140),
-    (150, 180),
+    (1, 30),   // Heart
+    (2, 50),   // Dog
+    (3, 60),   // Cat
+    (4, 80),   // Elephant
+    (5, 100),  // Butterfly
+    (6, 120),  // Complex Maze
+    (10, 35),
+    (20, 50),
+    (35, 75),
+    (50, 100),
+    (75, 150),
+    (100, 180),
+    (150, 220),
+    (200, 250),
   ];
 
   static int baselineArrowCount(int level) {
-    if (level <= 1) return 4;
-    if (level >= 150) {
-      final extra = ((level - 150) * 0.4).round();
-      return min(maxArrowCap, 180 + extra);
+    if (level <= 1) return 30;
+    if (level <= 6) {
+      // Exact test levels as specified:
+      return switch (level) {
+        1 => 30,  // Heart
+        2 => 50,  // Dog
+        3 => 60,  // Cat
+        4 => 80,  // Elephant
+        5 => 100, // Butterfly
+        6 => 120, // Complex maze
+        _ => 30,
+      };
     }
-    for (var i = 0; i < anchors.length - 1; i++) {
+    if (level >= 200) {
+      return maxArrowCap;
+    }
+    for (var i = 5; i < anchors.length - 1; i++) {
       final (l1, c1) = anchors[i];
       final (l2, c2) = anchors[i + 1];
       if (level >= l1 && level <= l2) {

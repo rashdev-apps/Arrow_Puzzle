@@ -9,12 +9,13 @@ import '../models/board.dart';
 import '../models/direction.dart';
 import '../models/grid_cell.dart';
 import '../models/level.dart';
-import '../silhouette/silhouette_generator.dart';
+import '../silhouette/shape_library.dart';
+import '../silhouette/shape_rasterizer.dart';
 import '../silhouette/silhouette_mask.dart';
 import '../solver.dart';
 
 class LevelGenerator {
-  final SilhouetteGenerator _silhouetteGen = const SilhouetteGenerator();
+  final ShapeRasterizer _rasterizer = const ShapeRasterizer();
   final Solver _solver = const Solver();
 
   static int hashSeed(int levelId, {String salt = 'arrowescape-v2'}) {
@@ -29,18 +30,21 @@ class LevelGenerator {
     final rng = Random(seed);
 
     final targetArrows = DifficultyConfig.arrowCount(levelId);
-    // Average segments per arrow: ~2.3 in early levels to ~3.5 in late levels
-    final avgPathLen = levelId <= 5 ? 2.4 : (levelId <= 20 ? 2.8 : 3.4);
-    final targetCells = (targetArrows * avgPathLen / 0.92).ceil();
+    final shape = ShapeLibrary.templateForLevel(levelId);
 
-    final silhouette = _silhouetteGen.generate(
-      level: levelId,
-      targetCells: targetCells,
-      rng: rng,
+    // Compute grid dimensions suited for recognizable silhouette resolution
+    // Higher arrow counts require larger grid resolution so animals/shapes are detailed
+    final (rows, cols) = _calculateGridResolution(targetArrows);
+
+    // Step 2 & 3: Rasterize vector silhouette to 2D occupancy grid
+    final silhouette = _rasterizer.rasterize(
+      shape: shape,
+      rows: rows,
+      cols: cols,
     );
 
-    // Chain puzzle arrow generation on silhouette
-    final arrows = _generateChainPuzzle(
+    // Step 4 to 8: Chain puzzle generation along silhouette contours
+    final arrows = _generateContourArrows(
       levelId: levelId,
       silhouette: silhouette,
       targetArrows: targetArrows,
@@ -68,7 +72,19 @@ class LevelGenerator {
     );
   }
 
-  List<Arrow> _generateChainPuzzle({
+  (int, int) _calculateGridResolution(int targetArrows) {
+    // Calibrate grid cells so silhouette is clear and arrows have room to wind
+    final avgPathLen = targetArrows <= 40 ? 2.6 : (targetArrows <= 90 ? 3.0 : 3.4);
+    final neededCells = (targetArrows * avgPathLen / 0.88).ceil();
+
+    // Portrait aspect ratio ~ 1.25 to 1.4
+    var cols = (sqrt(neededCells) * 0.85).floor().clamp(10, 40);
+    var rows = (neededCells / cols).ceil().clamp(cols, 55);
+
+    return (rows, cols);
+  }
+
+  List<Arrow> _generateContourArrows({
     required int levelId,
     required SilhouetteMask silhouette,
     required int targetArrows,
@@ -88,11 +104,11 @@ class LevelGenerator {
     final occupied = <GridCell, String>{};
     final arrows = <Arrow>[];
 
-    final minPathLen = levelId <= 5 ? 2 : (levelId <= 20 ? 3 : 3);
-    final maxPathLen = levelId <= 5 ? 3 : (levelId <= 20 ? 4 : 6);
+    final minPathLen = targetArrows <= 40 ? 2 : 3;
+    final maxPathLen = targetArrows <= 40 ? 3 : (targetArrows <= 100 ? 5 : 7);
 
     var attempts = 0;
-    while (arrows.length < targetArrows && free.isNotEmpty && attempts < 2000) {
+    while (arrows.length < targetArrows && free.isNotEmpty && attempts < 4000) {
       attempts++;
       final starts = free.toList()..shuffle(rng);
       Arrow? best;
@@ -100,8 +116,9 @@ class LevelGenerator {
       for (final head in starts) {
         if (best != null) break;
         final dirs = [...Direction.orthogonal]..shuffle(rng);
+
         for (final dir in dirs) {
-          // Check ray exit to boundary across silhouette mask
+          // Check ray exit to boundary
           var cell = head.shift(dir);
           var rayClear = true;
           while (cell.inside(rows, cols)) {
@@ -113,9 +130,17 @@ class LevelGenerator {
           }
           if (!rayClear) continue;
 
-          // Build valid orthogonal polyline tail
+          // Head run >= 2: first segment must be opposite to dir
+          final opp = dir.opposite;
+          final second = head.shift(opp);
+          if (!second.inside(rows, cols) ||
+              !silhouette.mask[second.row * cols + second.col] ||
+              !free.contains(second)) {
+            continue;
+          }
+
           final targetLen = minPathLen + rng.nextInt(maxPathLen - minPathLen + 1);
-          final path = _walkBackwards(
+          final path = _walkPolyline(
             head: head,
             headDir: dir,
             targetLen: targetLen,
@@ -126,7 +151,6 @@ class LevelGenerator {
             rng: rng,
           );
 
-          // Head run >= 2: straight segment before head
           if (path.length >= 2) {
             best = Arrow(id: 'a${arrows.length}', path: path, dir: dir);
             break;
@@ -142,13 +166,13 @@ class LevelGenerator {
       }
     }
 
-    // Extend tails to maximize coverage >= 92%
+    // Extend tails to maximize coverage and form complete recognizable shape
     _extendTails(arrows, free, occupied, rows, cols, silhouette.mask);
 
     return arrows;
   }
 
-  List<GridCell> _walkBackwards({
+  List<GridCell> _walkPolyline({
     required GridCell head,
     required Direction headDir,
     required int targetLen,
@@ -161,14 +185,7 @@ class LevelGenerator {
     final path = <GridCell>[head];
     final visited = <GridCell>{head};
 
-    // First step MUST be backwards along headDir to guarantee head_run >= 2
     final second = head.shift(headDir.opposite);
-    if (!second.inside(rows, cols) ||
-        !mask[second.row * cols + second.col] ||
-        !free.contains(second)) {
-      return path; // cannot form valid head run
-    }
-
     path.add(second);
     visited.add(second);
 
@@ -178,7 +195,6 @@ class LevelGenerator {
       final cur = path.last;
       final candidates = <Direction>[];
 
-      // Prioritize straight continuation, then 90 degree turns (no 180 backtrack)
       for (final d in Direction.orthogonal) {
         if (d == currentDir.opposite) continue;
         final next = cur.shift(d);
@@ -192,9 +208,9 @@ class LevelGenerator {
 
       if (candidates.isEmpty) break;
 
-      // Prefer straight continuation (70%) over turns
+      // Follow shape contour with 65% straight continuation
       Direction chosen;
-      if (candidates.contains(currentDir) && rng.nextDouble() < 0.7) {
+      if (candidates.contains(currentDir) && rng.nextDouble() < 0.65) {
         chosen = currentDir;
       } else {
         chosen = candidates[rng.nextInt(candidates.length)];
@@ -206,7 +222,7 @@ class LevelGenerator {
       currentDir = chosen;
     }
 
-    // Return in order from tail (index 0) to head (index last)
+    // Tail to head ordering
     return path.reversed.toList();
   }
 
@@ -230,7 +246,6 @@ class LevelGenerator {
           if (next.inside(rows, cols) &&
               mask[next.row * cols + next.col] &&
               free.contains(next)) {
-            // Prepend to tail
             final newPath = [next, ...a.path];
             arrows[i] = Arrow(id: a.id, path: newPath, dir: a.dir);
             free.remove(next);
@@ -243,4 +258,3 @@ class LevelGenerator {
     }
   }
 }
-
