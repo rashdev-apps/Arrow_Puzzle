@@ -1,6 +1,6 @@
-import '../models/arrow.dart';
-import '../models/board.dart';
-import '../rules/move_rules.dart';
+import 'models/arrow.dart';
+import 'models/board.dart';
+import 'rules/move_rules.dart';
 
 class SolverAnalysis {
   final List<String>? solutionOrder;

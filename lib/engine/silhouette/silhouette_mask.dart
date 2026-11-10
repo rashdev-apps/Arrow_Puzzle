@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
-import 'board.dart';
-import 'grid_cell.dart';
+import '../models/board.dart';
+import '../models/grid_cell.dart';
 
 enum SilhouetteFamily {
   organicBlob(1, 'Organic Blob'),

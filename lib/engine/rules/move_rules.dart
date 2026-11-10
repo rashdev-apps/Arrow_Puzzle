@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../models/arrow.dart';
 import '../models/board.dart';
 import '../models/direction.dart';
 import '../models/grid_cell.dart';
@@ -75,5 +76,36 @@ class MoveRules {
   bool canEscape(Board board, Set<String> remaining, String arrowId) {
     return testMove(board, remaining, arrowId) is ValidMove;
   }
+
+  /// Backward-compatible evaluate helper for [GameNotifier]
+  MoveValidationResult evaluate(Board board, Arrow arrow, Set<String> remaining) {
+    final outcome = testMove(board, remaining, arrow.id);
+    if (outcome is ValidMove) {
+      return const MoveValidationResult(valid: true, blockers: [], blockedRay: []);
+    } else if (outcome is BlockedMove) {
+      final blockerArrows = outcome.blockerIds
+          .map(board.arrowById)
+          .whereType<Arrow>()
+          .toList();
+      return MoveValidationResult(
+        valid: false,
+        blockers: blockerArrows,
+        blockedRay: outcome.blockedRay,
+      );
+    }
+    return const MoveValidationResult(valid: false, blockers: [], blockedRay: []);
+  }
+}
+
+class MoveValidationResult {
+  final bool valid;
+  final List<Arrow> blockers;
+  final List<GridCell> blockedRay;
+
+  const MoveValidationResult({
+    required this.valid,
+    required this.blockers,
+    required this.blockedRay,
+  });
 }
 
