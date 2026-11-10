@@ -4,25 +4,161 @@ import '../domain/arrow.dart';
 import '../domain/board.dart';
 import 'solver.dart';
 
-/// Target metrics for a specific level.
-class LevelDifficultyTarget {
-  final int levelId;
-  final int minArrows;
-  final int maxArrows;
-  final int minChain;
-  final double maxFreeRatio;
-  final double minRayBlockers;
-  final double minScore;
+enum DifficultyTier {
+  easy('Easy', 6.0),
+  medium('Medium', 5.0),
+  hard('Hard', 4.0),
+  expert('Expert', 3.5);
 
-  const LevelDifficultyTarget({
-    required this.levelId,
-    required this.minArrows,
-    required this.maxArrows,
-    required this.minChain,
-    required this.maxFreeRatio,
-    required this.minRayBlockers,
-    required this.minScore,
-  });
+  final String label;
+  final double secPerArrow;
+  const DifficultyTier(this.label, this.secPerArrow);
+}
+
+class BoardDimension {
+  final int rows;
+  final int cols;
+  const BoardDimension(this.rows, this.cols);
+
+  int get cellCount => rows * cols;
+}
+
+class DifficultyConfig {
+  static const List<(int level, int count)> anchors = [
+    (1, 4),
+    (2, 6),
+    (3, 8),
+    (4, 10),
+    (5, 12),
+    (8, 16),
+    (12, 24),
+    (20, 36),
+    (35, 52),
+    (50, 68),
+    (75, 90),
+    (100, 110),
+  ];
+
+  static const int maxArrowCap = 120;
+
+  /// Pure baseline monotonically increasing curve before sawtooth.
+  static int baselineArrowCount(int level) {
+    if (level <= 1) return 4;
+    if (level >= 100) {
+      // Scale from 110 at level 100 up to cap 120 at level 150+
+      final extra = ((level - 100) * 0.2).round();
+      return min(maxArrowCap, 110 + extra);
+    }
+
+    for (var i = 0; i < anchors.length - 1; i++) {
+      final (l1, c1) = anchors[i];
+      final (l2, c2) = anchors[i + 1];
+      if (level >= l1 && level <= l2) {
+        final t = (level - l1) / (l2 - l1);
+        final interp = c1 + t * (c2 - c1);
+        return interp.round();
+      }
+    }
+    return maxArrowCap;
+  }
+
+  /// Exact arrow count curve with boss/breather sawtooth applied:
+  /// - Every 10th level is a "boss" (+10% arrows).
+  /// - The level after a boss is a "breather" (~5% easier than its raw baseline).
+  /// - Monotonic progression guaranteed across anchors.
+  static int arrowCount(int level) {
+    final base = baselineArrowCount(level);
+    if (level % 10 == 0) {
+      // Boss level
+      return min(maxArrowCap, (base * 1.10).round());
+    } else if (level > 1 && (level - 1) % 10 == 0) {
+      // Breather level right after boss
+      final prevBase = baselineArrowCount(level - 1);
+      final breather = (base * 0.95).round();
+      // Keep at least equal or slightly greater than previous base so it never drops below previous anchor baseline
+      return max(prevBase, breather);
+    }
+    return base;
+  }
+
+  static bool isBossLevel(int level) => level > 0 && level % 10 == 0;
+
+  static DifficultyTier tierForLevel(int level) {
+    if (level <= 10) return DifficultyTier.easy;
+    if (level <= 30) return DifficultyTier.medium;
+    if (level <= 60) return DifficultyTier.hard;
+    return DifficultyTier.expert;
+  }
+
+  /// Returns (tier, isBoss) display info.
+  static String difficultyLabel(int level) {
+    final tier = tierForLevel(level);
+    if (isBossLevel(level)) {
+      return '${tier.label} • Boss';
+    }
+    return tier.label;
+  }
+
+  /// Board dimensions (rows x cols) computed from arrow count so coverage >= 90%.
+  /// Allows pleasant aspect ratios for portrait phone screens (e.g. 5x5, 6x8, 8x10, etc.).
+  static BoardDimension boardSizeFor(int level, int arrowCount) {
+    // Average segments per arrow range from ~2.2 at start to ~3.2 in later levels
+    final avgSegments = level <= 5 ? 2.3 : (level <= 20 ? 2.6 : 3.0);
+    final neededCells = (arrowCount * avgSegments / 0.92).ceil();
+
+    // Target portrait ratio around 1.1 - 1.35 (rows >= cols)
+    int bestRows = 5;
+    int bestCols = 5;
+    double bestDiff = 999999;
+
+    for (var cols = 4; cols <= 30; cols++) {
+      for (var rows = cols; rows <= (cols * 1.4).ceil() + 1; rows++) {
+        final total = rows * cols;
+        if (total >= neededCells) {
+          final coverage = (arrowCount * avgSegments) / total;
+          if (coverage >= 0.85 && coverage <= 1.05) {
+            final diff = (total - neededCells).abs();
+            if (diff < bestDiff) {
+              bestDiff = diff.toDouble();
+              bestRows = rows;
+              bestCols = cols;
+            }
+          }
+        }
+      }
+    }
+
+    // Safety fallback
+    if (bestRows * bestCols < neededCells) {
+      bestCols = (sqrt(neededCells) * 0.9).floor().clamp(5, 30);
+      bestRows = (neededCells / bestCols).ceil().clamp(5, 36);
+    }
+
+    return BoardDimension(bestRows, bestCols);
+  }
+
+  /// Timer limit in seconds:
+  /// First 3 levels have NO timer (null).
+  /// Other levels = max(20, (arrows * secPerArrow(tier)).round()).
+  static int? computeTimeLimitSeconds(int arrows, int level) {
+    if (level <= 3) return null;
+    final tier = tierForLevel(level);
+    final raw = (arrows * tier.secPerArrow).round();
+    return max(20, raw);
+  }
+
+  /// Scaled parameters for chain-puzzle generator knobs per level
+  static int maxFreeWave(int level) {
+    if (level <= 10) return 3;
+    if (level <= 30) return 2;
+    return 1;
+  }
+
+  static int minTrailDistance(int level) {
+    if (level <= 5) return 2;
+    if (level <= 20) return 4;
+    return 6;
+  }
 }
 
 /// Comprehensive quality and difficulty metrics computed for any board.
@@ -63,94 +199,27 @@ class BoardQualityMetrics {
     required this.isForcedOrder,
   });
 
-  /// Evaluates whether this board meets all mandatory quality thresholds.
   bool isValidFor(int levelId) {
-    final N = arrowCount;
-    if (N < 15) return false;
     if (!isSolvable) return false;
-    if (coverage < 0.85) return false;
+    if (coverage < 0.82) return false;
 
-    // Chain puzzle constraints:
-    if (levelId <= 15) {
-      // Early levels: teach mechanic, up to 2 free arrows allowed
-      if (maxFreeWave > 2) return false;
-      if (free0 > 2) return false;
-    } else {
-      // Mid & Late levels: high dependency, low concurrency
-      // maxFreeWave <= 2 allowed, with avgFree <= 1.25 and free0 <= 2
-      if (maxFreeWave > 2) return false;
-      if (free0 > 2) return false;
-      if (avgFree > 1.25) return false;
-    }
+    final allowedMaxFree = DifficultyConfig.maxFreeWave(levelId);
+    if (maxFreeWave > allowedMaxFree) return false;
+
+    if (levelId > 30 && !isForcedOrder && maxFreeWave > 2) return false;
 
     return true;
   }
-}
 
-/// Central difficulty configuration and quality calculator.
-abstract final class DifficultyConfig {
-  static const int chapterSize = 20;
-  static const int totalLevels = 200;
-
-  /// Target arrow count range for a given level id.
-  /// L1-L4: 40-50
-  /// L5-L8: 50-60
-  /// L9-L12: 60-70
-  /// L13-L16: 70-80
-  /// L17-L19: 80-90
-  /// L20 (boss): 90-110
-  /// Later shapes get +3 per chapter, capped at 120.
-  static (int min, int max) targetArrowCount(int levelId) {
-    final chapter = (levelId - 1) ~/ chapterSize;
-    final indexInChapter = (levelId - 1) % chapterSize + 1;
-    final chapterBonus = min(8, chapter);
-
-    int baseMin;
-    int baseMax;
-    if (indexInChapter <= 4) {
-      baseMin = 20;
-      baseMax = 42;
-    } else if (indexInChapter <= 8) {
-      baseMin = 22;
-      baseMax = 50;
-    } else if (indexInChapter <= 12) {
-      baseMin = 24;
-      baseMax = 58;
-    } else if (indexInChapter <= 16) {
-      baseMin = 26;
-      baseMax = 65;
-    } else if (indexInChapter <= 19) {
-      baseMin = 28;
-      baseMax = 72;
-    } else {
-      baseMin = 30;
-      baseMax = 82;
-    }
-
-    final minArrows = min(40, baseMin + chapterBonus);
-    final maxArrows = min(85, baseMax + chapterBonus);
-    return (minArrows, maxArrows);
-  }
-
-  /// Grid size scaled up so that coverage stays >= 92% with large arrow counts.
-  static int targetGridSize(int levelId) {
-    final (minArrows, maxArrows) = targetArrowCount(levelId);
-    final targetN = (minArrows + maxArrows) ~/ 2;
-    final cellsNeeded = targetN * 4.3;
-    final side = sqrt(cellsNeeded).round();
-    return side.clamp(14, 25);
-  }
-
-  /// Calculates all quality metrics for a board.
-  static BoardQualityMetrics evaluate(Board board) {
-    const solver = Solver();
-    final graph = solver.dependencyGraph(board);
-    final analysis = solver.analyze(board);
-
-    final N = board.arrows.length;
-    if (N == 0 || !analysis.isSolvable) {
-      return BoardQualityMetrics(
-        arrowCount: N,
+  static BoardQualityMetrics evaluate(
+    Board board, {
+    Solver solver = const Solver(),
+  }) {
+    final arrows = board.arrows;
+    final N = arrows.length;
+    if (N == 0) {
+      return const BoardQualityMetrics(
+        arrowCount: 0,
         free0: 0,
         free0Ratio: 0,
         longestChain: 0,
@@ -169,161 +238,69 @@ abstract final class DifficultyConfig {
       );
     }
 
-    final free0 = analysis.freeAtStart;
-    final free0Ratio = free0 / N;
-    final longestChain = analysis.longestChain;
+    final occupiedCount = board.occupiedCount;
+    final activeCount = board.activeCellCount;
+    final coverage = activeCount == 0 ? 0.0 : occupiedCount / activeCount;
+
+    int turns = 0;
+    for (final a in arrows) {
+      turns += a.bendCount;
+    }
+    final windingRatio = turns / N;
+
+    final freeAtStart = arrows.where((a) => solver.canEscape(board, a)).length;
+    final free0Ratio = freeAtStart / N;
+
+    int totalRayBlockers = 0;
+    int multiBlockerCount = 0;
+    for (final a in arrows) {
+      final blockers = solver.countRayBlockers(board, a);
+      totalRayBlockers += blockers;
+      if (blockers >= 2) multiBlockerCount++;
+    }
+    final avgRayBlockers = totalRayBlockers / N;
+    final multiBlockerRatio = multiBlockerCount / N;
+
+    final solution = solver.solveWithConcurrency(board);
+    final isSolvable = solution != null;
+
+    final maxFreeWave = solution?.maxWaveWidth ?? freeAtStart;
+    final maxFreeWaveRatio = maxFreeWave / N;
+    final avgFree = solution?.avgFreePerStep ?? freeAtStart.toDouble();
+    final longestChain = solution?.longestChain ?? 0;
     final depthRatio = longestChain / N;
+    final isForcedOrder = solution?.isForcedOrder ?? false;
 
-    // Ray blockers count
-    var totalBlockers = 0;
-    var multiBlockersCount = 0;
-    for (final blockers in graph.values) {
-      totalBlockers += blockers.length;
-      if (blockers.length >= 2) multiBlockersCount++;
+    int decoyCount = 0;
+    for (final a in arrows) {
+      if (solver.canEscape(board, a)) continue;
+      final blockers = solver.countRayBlockers(board, a);
+      if (blockers == 1) decoyCount++;
     }
-    final avgRayBlockers = totalBlockers / N;
-    final multiBlockerRatio = multiBlockersCount / N;
 
-    // Simulate step-by-step solve to measure maxFree, avgFree, decoys, and forced order
-    var maxWave = free0;
-    var totalFreeAcrossSteps = 0;
-    var steps = 0;
-    var decoyCount = 0;
-    final remaining = graph.keys.toSet();
-    while (remaining.isNotEmpty) {
-      final freeNow = remaining
-          .where((id) => graph[id]!.every((b) => !remaining.contains(b)))
-          .toList();
-      if (freeNow.isEmpty) break;
-      if (freeNow.length > maxWave) maxWave = freeNow.length;
-      totalFreeAcrossSteps += freeNow.length;
-      steps++;
-
-      // Decoys: arrows blocked by only 1 arrow that is not yet removable
-      final almostFree = remaining.where((id) {
-        if (freeNow.contains(id)) return false;
-        final unremovedBlockers = graph[id]!.where((b) => remaining.contains(b)).length;
-        return unremovedBlockers == 1;
-      }).length;
-      decoyCount += almostFree;
-
-      // In a real player solve, remove one free arrow
-      remaining.remove(freeNow.first);
-    }
-    final avgFree = steps > 0 ? totalFreeAcrossSteps / steps : 0.0;
-    final isForcedOrder = maxWave <= 1;
-    final maxFreeWaveRatio = maxWave / N;
-
-    // Winding ratio: arrows with >= 3 turns
-    var windingCount = 0;
-    for (final arrow in board.arrows) {
-      if (_countTurns(arrow) >= 3) windingCount++;
-    }
-    final windingRatio = windingCount / N;
-
-    // Coverage
-    final totalMasked = board.maskedCellCount;
-    final occupied = board.occupancy.length;
-    final coverage = totalMasked > 0 ? occupied / totalMasked : 0.0;
-
-    // difficulty_score = 0.35*depth_ratio + 0.25*avg_ray_blockers_norm + 0.2*(1 - free0_ratio) + 0.2*winding_ratio
-    final avgBlockersNorm = (avgRayBlockers / 4.0).clamp(0.0, 1.0);
-    final score = 0.35 * depthRatio +
-        0.25 * avgBlockersNorm +
-        0.20 * (1.0 - free0Ratio) +
-        0.20 * windingRatio;
+    final score = (depthRatio * 35.0) +
+        ((1.0 - (maxFreeWaveRatio.clamp(0.0, 1.0))) * 25.0) +
+        (avgRayBlockers * 15.0) +
+        (windingRatio * 15.0) +
+        (coverage * 10.0);
 
     return BoardQualityMetrics(
       arrowCount: N,
-      free0: free0,
+      free0: freeAtStart,
       free0Ratio: free0Ratio,
       longestChain: longestChain,
       depthRatio: depthRatio,
       avgRayBlockers: avgRayBlockers,
       multiBlockerRatio: multiBlockerRatio,
-      maxFreeWave: maxWave,
+      maxFreeWave: maxFreeWave,
       maxFreeWaveRatio: maxFreeWaveRatio,
-      avgFree: double.parse(avgFree.toStringAsFixed(2)),
+      avgFree: avgFree,
       decoyCount: decoyCount,
       coverage: coverage,
       windingRatio: windingRatio,
-      difficultyScore: double.parse(score.toStringAsFixed(4)),
-      isSolvable: true,
+      difficultyScore: score,
+      isSolvable: isSolvable,
       isForcedOrder: isForcedOrder,
     );
-  }
-
-  static int _countTurns(Arrow arrow) {
-    final path = arrow.path;
-    if (path.length < 3) return 0;
-    var turns = 0;
-    for (var i = 1; i < path.length - 1; i++) {
-      final prev = path[i - 1];
-      final curr = path[i];
-      final next = path[i + 1];
-      final d1r = curr.row - prev.row;
-      final d1c = curr.col - prev.col;
-      final d2r = next.row - curr.row;
-      final d2c = next.col - curr.col;
-      if (d1r != d2r || d1c != d2c) turns++;
-    }
-    return turns;
-  }
-
-  // ---- Countdown Timer Configuration -----------------------------------------
-  static const double secPerArrowEasy = 6.0;   // Levels 1-5 (after intro) / easy tier
-  static const double secPerArrowMedium = 5.0; // Levels 6-12
-  static const double secPerArrowHard = 4.0;   // Levels 13-19
-  static const double secPerArrowBoss = 3.5;   // Level 20 (boss level)
-
-  static const int minTimeLimitSeconds = 45;
-  static const int maxTimeLimitSeconds = 600;
-
-  static const int mistakePenaltySeconds = 3;
-  static const int reviveSecondsBonus = 30;
-  static const int freezePowerupSeconds = 10;
-  static const int freezePowerupCost = 15;
-
-  /// Returns seconds per arrow based on relative position within a chapter.
-  /// indexInChapter: 1..20
-  static double secPerArrowForLevel(int levelId) {
-    final indexInChapter = ((levelId - 1) % 20) + 1;
-    if (indexInChapter == 20) return secPerArrowBoss;
-    if (indexInChapter >= 13) return secPerArrowHard;
-    if (indexInChapter >= 6) return secPerArrowMedium;
-    return secPerArrowEasy;
-  }
-
-  /// Calculates deterministic time limit in seconds from arrow count and level.
-  /// limit = round(N * secPerArrow(tier)).clamp(45, 600).
-  static int computeTimeLimitSeconds(int arrowCount, int levelId) {
-    final secPerArrow = secPerArrowForLevel(levelId);
-    final raw = (arrowCount * secPerArrow).round();
-    return raw.clamp(minTimeLimitSeconds, maxTimeLimitSeconds);
-  }
-
-  /// Determines stars from mistakes, time used, total limit, and relaxed mode.
-  /// - Relaxed mode: timer disabled, max 2 stars.
-  /// - Normal mode:
-  ///   - 3 stars: 0 mistakes AND timeLeft >= 30% of limit
-  ///   - 2 stars: mistakes <= 1 OR finished with any time left (> 0)
-  ///   - 1 star: otherwise
-  static int computeStars({
-    required int mistakes,
-    required int timeLeftSeconds,
-    required int limitSeconds,
-    required bool relaxedMode,
-  }) {
-    if (relaxedMode) {
-      if (mistakes == 0) return 2;
-      return 1;
-    }
-    if (mistakes == 0 && timeLeftSeconds >= (limitSeconds * 0.30).ceil()) {
-      return 3;
-    }
-    if (mistakes <= 1 || timeLeftSeconds > 0) {
-      return 2;
-    }
-    return 1;
   }
 }

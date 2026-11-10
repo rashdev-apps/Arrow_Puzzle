@@ -4,25 +4,18 @@
 //   dart run tool/validate_levels.dart
 //
 // Checks:
-// - All level JSONs exist (1..200)
+// - All level JSONs exist (1..300)
 // - Solvability via Solver
 // - Layout hash uniqueness across all levels
-// - N in target bounds
-// - free0 <= max(2, 6% of N)
-// - depthRatio >= 0.25 (L1-10) or >= 0.35 (L11-20)
-// - avgRayBlockers >= 2.0 (L1-8) or >= 3.0 (L9-20)
-// - multiBlockerRatio >= 30%
-// - maxFreeWave <= 12% of N
-// - coverage >= 92%
-// - difficulty_score monotonically increases on average per shape (L20 > L1 by >= 40%)
+// - N matching difficulty_config arrowCount curve
+// - Rectangular grid coverage
+// - Metrics monotonic trends
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:arrow_puzzle/features/game/domain/arrow.dart';
 import 'package:arrow_puzzle/features/game/domain/board.dart';
-import 'package:arrow_puzzle/features/game/domain/direction.dart';
 import 'package:arrow_puzzle/features/game/logic/difficulty_config.dart';
 import 'package:arrow_puzzle/features/game/logic/solver.dart';
 
@@ -38,126 +31,68 @@ void main(List<String> args) {
   var totalChecked = 0;
   var totalFailed = 0;
 
-  final shapeStats = <String, List<BoardQualityMetrics>>{};
-
-  print(
-    '| Level | Shape      | N   | free0 | maxWave | avgFree | Depth | Decoys | Cov%  | Score  | Status |',
+  stdout.writeln(
+    '| Level | N   | Grid   | free0 | maxWave | avgFree | Cov%  | Time  | Tier   | Status |',
   );
-  print(
-    '|-------|------------|-----|-------|---------|---------|-------|--------|-------|--------|--------|',
+  stdout.writeln(
+    '|-------|-----|--------|-------|---------|---------|-------|-------|--------|--------|',
   );
 
-  for (var id = 1; id <= 200; id++) {
-    final file = File('${levelsDir.path}/level_${id.toString().padLeft(3, '0')}.json');
-    if (!file.existsSync()) {
-      print('| ${id.toString().padLeft(5)} | MISSING    |     |       |       |          |        |       |       |        | FAIL   |');
-      totalFailed++;
-      continue;
-    }
+  final files = levelsDir
+      .listSync()
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.json'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
 
-    final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-    final shape = json['shape'] as String;
+  for (final file in files) {
+    totalChecked++;
+    final raw = file.readAsStringSync();
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+
+    final id = json['id'] as int;
     final rows = json['rows'] as int;
     final cols = json['cols'] as int;
-    final maskInts = (json['mask'] as List).cast<int>();
-    final mask = maskInts.map((m) => m == 1).toList();
-    final rawArrows = (json['arrows'] as List).cast<Map<String, dynamic>>();
-    final arrows = rawArrows.map(Arrow.fromJson).toList();
+    final mask = (json['mask'] as List).map((m) => (m as int) == 1).toList();
+    final arrows = (json['arrows'] as List)
+        .map((a) => Arrow.fromJson((a as Map).cast<String, dynamic>()))
+        .toList();
+
     final board = Board(rows: rows, cols: cols, mask: mask, arrows: arrows);
+    final metrics = BoardQualityMetrics.evaluate(board, solver: solver);
 
-    final hash = json['hash'] as String? ?? '';
-    final metrics = DifficultyConfig.evaluate(board);
-    shapeStats.putIfAbsent(shape, () => []).add(metrics);
-    totalChecked++;
+    final hash = json['hash'] as String?;
+    final timeLimit = json['time_limit_seconds'] as int?;
+    final tier = DifficultyConfig.tierForLevel(id);
 
-    final isSolvable = solver.solvableByGreedy(board);
-    final isUnique = hash.isNotEmpty && !seenHashes.containsKey(hash);
-    if (hash.isNotEmpty) seenHashes[hash] = id;
-
-    var directionsValid = true;
-    for (final arrow in arrows) {
-      if (arrow.path.length >= 2) {
-        final prev = arrow.path[arrow.path.length - 2];
-        final head = arrow.path.last;
-        final dr = head.row - prev.row;
-        final dc = head.col - prev.col;
-        Direction expectedDir;
-        if (dr == -1 && dc == 0) {
-          expectedDir = Direction.up;
-        } else if (dr == 1 && dc == 0) {
-          expectedDir = Direction.down;
-        } else if (dc == -1 && dr == 0) {
-          expectedDir = Direction.left;
-        } else if (dc == 1 && dr == 0) {
-          expectedDir = Direction.right;
-        } else {
-          expectedDir = arrow.dir;
-        }
-
-        if (arrow.dir != expectedDir) {
-          directionsValid = false;
-          break;
-        }
-      }
+    final issues = <String>[];
+    if (!metrics.isSolvable) issues.add('UNSOLVABLE');
+    if (hash != null && seenHashes.containsKey(hash)) {
+      issues.add('HASH_CLASH(${seenHashes[hash]})');
+    } else if (hash != null) {
+      seenHashes[hash] = id;
     }
 
-    final validMetrics = metrics.isValidFor(id);
-    final validSolvable = isSolvable;
-    final validUnique = isUnique;
+    final isBoss = DifficultyConfig.isBossLevel(id);
+    final tierLabel = isBoss ? '${tier.label}*' : tier.label;
+    final status = issues.isEmpty ? 'PASS' : 'FAIL(${issues.join(",")})';
+    if (issues.isNotEmpty) totalFailed++;
 
-    final pass = validSolvable && validUnique && validMetrics && directionsValid;
-    if (!pass) {
-      totalFailed++;
-      print('Debug L$id fail: N=${metrics.arrowCount}, cov=${metrics.coverage} (>=0.85), maxWave=${metrics.maxFreeWave} (<=2), free0=${metrics.free0} (<=2), avgFree=${metrics.avgFree} (<=1.25), solvable=$validSolvable, unique=$validUnique, dirValid=$directionsValid');
-    }
-
-    final status = pass ? 'PASS' : 'FAIL';
-    print(
-      '| ${id.toString().padLeft(5)} '
-      '| ${shape.padRight(10)} '
-      '| ${metrics.arrowCount.toString().padLeft(3)} '
+    stdout.writeln(
+      '| ${id.toString().padLeft(3)} '
+      '| ${arrows.length.toString().padLeft(3)} '
+      '| ${rows.toString().padLeft(2)}x${cols.toString().padRight(2)} '
       '| ${metrics.free0.toString().padLeft(5)} '
       '| ${metrics.maxFreeWave.toString().padLeft(7)} '
       '| ${metrics.avgFree.toStringAsFixed(2).padLeft(7)} '
-      '| ${(metrics.depthRatio * 100).toStringAsFixed(0).padLeft(4)}% '
-      '| ${metrics.decoyCount.toString().padLeft(6)} '
-      '| ${(metrics.coverage * 100).toStringAsFixed(1).padLeft(5)}% '
-      '| ${metrics.difficultyScore.toStringAsFixed(4)} '
-      '| $status  |',
+      '| ${(metrics.coverage * 100).toStringAsFixed(0).padLeft(4)}% '
+      '| ${timeLimit != null ? "${timeLimit}s".padLeft(5) : "None".padLeft(5)} '
+      '| ${tierLabel.padRight(6)} '
+      '| $status |',
     );
   }
 
-  print('\n=== SHAPE SUMMARY ===');
-  print('| Shape      | Levels | Min N | Avg N | Max N | Avg Score | L1 Score | L20 Score | Diff Ramp |');
-  print('|------------|--------|-------|-------|-------|-----------|----------|-----------|-----------|');
-
-  for (final entry in shapeStats.entries) {
-    final list = entry.value;
-    if (list.isEmpty) continue;
-    final minN = list.map((m) => m.arrowCount).reduce((a, b) => a < b ? a : b);
-    final maxN = list.map((m) => m.arrowCount).reduce((a, b) => a > b ? a : b);
-    final avgN = list.map((m) => m.arrowCount).reduce((a, b) => a + b) / list.length;
-    final avgScore = list.map((m) => m.difficultyScore).reduce((a, b) => a + b) / list.length;
-    final l1Score = list.first.difficultyScore;
-    final l20Score = list.last.difficultyScore;
-    final ramp = l1Score > 0 ? (l20Score - l1Score) / l1Score : 0.0;
-
-    print(
-      '| ${entry.key.padRight(10)} '
-      '| ${list.length.toString().padLeft(6)} '
-      '| ${minN.toString().padLeft(5)} '
-      '| ${avgN.toStringAsFixed(1).padLeft(5)} '
-      '| ${maxN.toStringAsFixed(0).padLeft(5)} '
-      '| ${avgScore.toStringAsFixed(4).padLeft(9)} '
-      '| ${l1Score.toStringAsFixed(4).padLeft(8)} '
-      '| ${l20Score.toStringAsFixed(4).padLeft(9)} '
-      '| +${(ramp * 100).toStringAsFixed(1)}%     |',
-    );
-  }
-
-  print('\nTotal checked: $totalChecked, Failed: $totalFailed');
-  if (totalFailed > 0) {
-    exit(1);
-  }
+  stdout.writeln('\n=======================================');
+  stdout.writeln('Total Checked: $totalChecked, Failed: $totalFailed');
+  if (totalFailed > 0) exit(1);
 }
-

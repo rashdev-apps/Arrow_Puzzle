@@ -8,7 +8,6 @@ import '../../domain/level.dart';
 import '../difficulty_config.dart';
 import '../solver.dart';
 import 'layout_hash.dart';
-import 'shapes.dart';
 
 class GeneratedLevel {
   final Level level;
@@ -30,6 +29,13 @@ class GeneratedLevel {
   double get difficultyScore => level.difficulty;
 }
 
+/// Linear Rectangular Grid Level Generator.
+/// Generates deterministic, 100% solvable chain puzzles with:
+/// - Forced solution orders
+/// - Decoy blocker paths
+/// - Arrow heads matching direction
+/// - Head run >= 2 (straight head)
+/// - Rectangular portrait-friendly boards with >= 90% target coverage
 class LevelGenerator {
   final Solver _solver = const Solver();
 
@@ -37,37 +43,41 @@ class LevelGenerator {
       LayoutHash.seed('$salt:$levelId');
 
   GeneratedLevel generate(
-    int levelId,
-    ShapeMask shape, {
+    int levelId, {
     int? seedOverride,
     String salt = 'arrowescape',
   }) {
-    final (minArrows, maxArrows) = DifficultyConfig.targetArrowCount(levelId);
-    final scaled = _fitAspect(shape, levelId);
-    final rows = scaled.baseRows;
-    final cols = scaled.baseCols;
-    final mask = scaled.toMask();
+    final targetCount = DifficultyConfig.arrowCount(levelId);
+    final dim = DifficultyConfig.boardSizeFor(levelId, targetCount);
+    final rows = dim.rows;
+    final cols = dim.cols;
+
+    // Plain rectangular grid (no shape masks)
+    final mask = List<bool>.filled(rows * cols, true);
 
     GeneratedLevel? bestResult;
     double bestScore = -1.0;
 
+    // Fast generation loop
     for (var attempt = 0; attempt < 80; attempt++) {
       final rng = Random(seedOverride ?? seedFor(levelId, salt: '$salt#$attempt'));
       final result = _tryGenerate(
         levelId,
-        shape.name,
         rows,
         cols,
         mask,
-        minArrows,
-        maxArrows,
+        targetCount,
         rng,
       );
       if (result != null) {
         if (result.metrics.isValidFor(levelId)) {
           return result;
         }
-        if (result.metrics.isSolvable && (bestResult == null || result.metrics.maxFreeWave < bestResult.metrics.maxFreeWave || (result.metrics.maxFreeWave == bestResult.metrics.maxFreeWave && result.metrics.difficultyScore > bestScore))) {
+        if (result.metrics.isSolvable &&
+            (bestResult == null ||
+                result.metrics.maxFreeWave < bestResult.metrics.maxFreeWave ||
+                (result.metrics.maxFreeWave == bestResult.metrics.maxFreeWave &&
+                    result.metrics.difficultyScore > bestScore))) {
           bestScore = result.metrics.difficultyScore;
           bestResult = result;
         }
@@ -78,78 +88,56 @@ class LevelGenerator {
       return bestResult;
     }
 
-    for (var attempt = 0; attempt < 50; attempt++) {
+    // Safety fallback with relaxed constraints
+    for (var attempt = 0; attempt < 60; attempt++) {
       final rng = Random(seedFor(levelId, salt: '$salt#fallback#$attempt'));
       final result = _tryGenerate(
         levelId,
-        shape.name,
         rows,
         cols,
         mask,
-        15,
-        maxArrows,
+        targetCount,
         rng,
+        isFallback: true,
       );
       if (result != null && result.metrics.isSolvable) {
         return result;
       }
     }
 
-    throw StateError('Failed to generate solvable level $levelId after 130 attempts');
-  }
-
-  ShapeMask _fitAspect(ShapeMask shape, int levelId) {
-    // For any shape, calculate target cell count from desired arrow count.
-    final (minArrows, maxArrows) = DifficultyConfig.targetArrowCount(levelId);
-    final targetN = (minArrows + maxArrows) / 2.0;
-    // Each arrow takes around 4.0 to 4.5 cells on average
-    final targetCells = targetN * 4.3;
-
-    final nativeCells = shape.cells.length;
-    final scale = sqrt(targetCells / nativeCells);
-    var rows = (shape.baseRows * scale).round();
-    var cols = (shape.baseCols * scale).round();
-
-    // Limit maximum dimensions for performance and screen layout
-    if (cols > 28) {
-      final ratio = 28 / cols;
-      cols = 28;
-      rows = (rows * ratio).round();
-    }
-    if (rows > 28) {
-      final ratio = 28 / rows;
-      rows = 28;
-      cols = (cols * ratio).round();
-    }
-    return shape.resized(max(10, rows), max(10, cols));
+    throw StateError('Failed to generate solvable level $levelId');
   }
 
   GeneratedLevel? _tryGenerate(
     int levelId,
-    String shapeName,
     int rows,
     int cols,
     List<bool> mask,
-    int minArrows,
-    int maxArrows,
-    Random rng,
-  ) {
+    int targetArrows,
+    Random rng, {
+    bool isFallback = false,
+  }) {
     final free = <GridCell>{};
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
-        if (mask[r * cols + c]) free.add(GridCell(r, c));
+        free.add(GridCell(r, c));
       }
     }
     final occupied = <GridCell, String>{};
     final arrows = <Arrow>[];
 
-    while (arrows.length < maxArrows && free.isNotEmpty) {
+    // Arrow length configuration
+    final minPathLen = levelId <= 5 ? 2 : (levelId <= 20 ? 3 : 3);
+    final maxPathLen = levelId <= 5 ? 3 : (levelId <= 20 ? 4 : 5);
+
+    while (arrows.length < targetArrows && free.isNotEmpty) {
       final starts = free.toList()..shuffle(rng);
       Arrow? best;
       for (final head in starts) {
         if (best != null) break;
         final dirs = [...DirectionX.orthogonal]..shuffle(rng);
         for (final dir in dirs) {
+          // Check ray exit to boundary
           var cell = head.shift(dir);
           var clear = true;
           while (cell.inside(rows, cols)) {
@@ -160,8 +148,20 @@ class LevelGenerator {
             cell = cell.shift(dir);
           }
           if (!clear) continue;
-          final path = _walkBackwards(head, dir, 3 + rng.nextInt(3), free, rows, cols, mask, rng);
-          if (path.length >= 3) {
+
+          final targetLen = minPathLen + rng.nextInt(maxPathLen - minPathLen + 1);
+          final path = _walkBackwards(
+            head,
+            dir,
+            targetLen,
+            free,
+            rows,
+            cols,
+            mask,
+            rng,
+          );
+
+          if (path.length >= 2) {
             best = Arrow(id: 'a${arrows.length}', path: path, dir: dir);
             break;
           }
@@ -175,22 +175,21 @@ class LevelGenerator {
       }
     }
 
-    if (arrows.length < 15) return null;
+    if (arrows.length < (isFallback ? max(3, (targetArrows * 0.7).floor()) : max(3, (targetArrows * 0.85).floor()))) {
+      return null;
+    }
 
     _extendTailsSafely(arrows, free, occupied, rows, cols, mask);
 
     var currentBoard = Board(rows: rows, cols: cols, mask: mask, arrows: arrows);
 
     // Simulated annealing optimizer to minimize maxFreeWave and avgFree
-    for (var pass = 0; pass < 25; pass++) {
+    for (var pass = 0; pass < 20; pass++) {
       var improved = false;
       for (var i = 0; i < arrows.length; i++) {
         final a = arrows[i];
         final candidateArrows = <Arrow>[];
 
-        // The only valid direction for an arrow is the direction of its last segment!
-        // We can test reversing the path so the tail becomes the head, with the new head's dir
-        // pointing strictly along the reversed path's last segment.
         if (a.path.length >= 2) {
           final rev = a.path.reversed.toList();
           final prev = rev[rev.length - 2];
@@ -225,8 +224,8 @@ class LevelGenerator {
           testArrows[i] = cand;
           final testBoard = Board(rows: rows, cols: cols, mask: mask, arrows: testArrows);
           if (_solver.solvableByGreedy(testBoard)) {
-            final mCurrent = DifficultyConfig.evaluate(currentBoard);
-            final mTest = DifficultyConfig.evaluate(testBoard);
+            final mCurrent = BoardQualityMetrics.evaluate(currentBoard);
+            final mTest = BoardQualityMetrics.evaluate(testBoard);
             if (mTest.maxFreeWave < mCurrent.maxFreeWave ||
                 (mTest.maxFreeWave == mCurrent.maxFreeWave && mTest.avgFree < mCurrent.avgFree)) {
               arrows[i] = cand;
@@ -243,11 +242,11 @@ class LevelGenerator {
     final analysis = _solver.analyze(currentBoard);
     if (!analysis.isSolvable) return null;
 
-    final metrics = DifficultyConfig.evaluate(currentBoard);
+    final metrics = BoardQualityMetrics.evaluate(currentBoard);
 
     final level = Level(
       id: levelId,
-      shape: shapeName,
+      shape: 'rectangle',
       board: currentBoard,
       parMoves: arrows.length,
       difficulty: metrics.difficultyScore,
@@ -324,8 +323,7 @@ class LevelGenerator {
     final path = <GridCell>[head];
     final claimed = <GridCell>{head};
 
-    // The FIRST step backwards MUST be in backwardsDir so that the last segment
-    // (from path[last-1] to head) points strictly in forwardDir!
+    // Rule: head_run >= 2 and head segment must point strictly in forwardDir!
     final firstBackStep = head.shift(backwardsDir);
     if (!firstBackStep.inside(rows, cols) ||
         !mask[firstBackStep.row * cols + firstBackStep.col] ||
@@ -335,8 +333,6 @@ class LevelGenerator {
     path.add(firstBackStep);
     claimed.add(firstBackStep);
 
-    // Do not walk onto any cell that lies on the arrow's exit ray!
-    // Otherwise the arrow's body/tail would curl around and block its own exit ray.
     final exitRayCells = <GridCell>{};
     var rayStep = head.shift(forwardDir);
     while (rayStep.inside(rows, cols)) {
@@ -347,7 +343,12 @@ class LevelGenerator {
     var current = firstBackStep;
     var currentBackDir = backwardsDir;
     while (path.length < targetLen) {
-      final candidates = [currentBackDir, _turnLeft(currentBackDir), _turnRight(currentBackDir)]..shuffle(rng);
+      final candidates = [
+        currentBackDir,
+        _turnLeft(currentBackDir),
+        _turnRight(currentBackDir)
+      ]..shuffle(rng);
+
       GridCell? next;
       Direction? chosenDir;
       for (final d in candidates) {

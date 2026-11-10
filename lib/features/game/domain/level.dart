@@ -24,7 +24,7 @@ class Level extends Equatable {
 
   const Level({
     required this.id,
-    required this.shape,
+    this.shape = 'rectangle',
     required this.board,
     required this.parMoves,
     required this.difficulty,
@@ -64,7 +64,7 @@ class Level extends Equatable {
         .toList(growable: false);
     return Level(
       id: json['id'] as int,
-      shape: json['shape'] as String,
+      shape: (json['shape'] as String?) ?? 'rectangle',
       board: Board(rows: rows, cols: cols, mask: mask, arrows: arrows),
       parMoves: json['par_moves'] as int,
       difficulty: (json['difficulty'] as num).toDouble(),

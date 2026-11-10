@@ -2,15 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
-import '../../../core/constants.dart';
 import '../../game/domain/level.dart';
 import '../../game/logic/generator/layout_hash.dart';
 import '../../game/logic/generator/level_generator.dart';
-import '../../game/logic/generator/shapes.dart';
 
 /// Loads pre-generated level JSON from assets, falling back to deterministic
-/// runtime generation (same seeds) when a file is missing. Also builds the
-/// daily challenge level.
+/// runtime generation (same seeds) for 301+ or when a file is missing.
 class LevelRepository {
   final Map<int, Level> _cache = {};
 
@@ -28,11 +25,6 @@ class LevelRepository {
         (jsonDecode(raw) as Map).cast<String, dynamic>(),
       );
     } catch (_) {
-      // Fallback: load an existing level asset deterministically if within 1..200
-      if (levelId > 200) {
-        final fallbackId = (levelId % 200) + 1;
-        return load(fallbackId);
-      }
       level = _generate(levelId);
     }
     _cache[levelId] = level;
@@ -40,9 +32,7 @@ class LevelRepository {
   }
 
   Level _generate(int levelId) {
-    final chapter = (levelId - 1) ~/ AppConstants.chapterSize;
-    final shape = kBuiltinShapes[chapter % kBuiltinShapes.length];
-    return LevelGenerator().generate(levelId, shape).level;
+    return LevelGenerator().generate(levelId).level;
   }
 
   /// Daily challenge: selects a daily puzzle deterministically from the level catalog
@@ -52,19 +42,19 @@ class LevelRepository {
     final cached = _cache[key];
     if (cached != null) return cached;
 
-    // Pick a daily level deterministically from levels 30..150
+    // Pick a daily level deterministically from levels 20..100
     final seed = LayoutHash.seed('daily:$key');
-    final levelNum = 30 + (seed.abs() % 120);
+    final levelNum = 20 + (seed.abs() % 80);
 
     final baseLevel = await load(levelNum);
-    // Wrap with the daily key id so daily progress & stats are cleanly tracked
     final dailyLevel = Level(
       id: key,
-      shape: baseLevel.shape,
+      shape: 'rectangle',
       board: baseLevel.board,
       parMoves: baseLevel.parMoves,
       difficulty: baseLevel.difficulty,
       hash: baseLevel.hash,
+      timeLimitSeconds: baseLevel.timeLimitSeconds,
     );
 
     _cache[key] = dailyLevel;

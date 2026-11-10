@@ -1,99 +1,57 @@
-// Pre-generates the 200 launch levels into assets/levels/.
-//
-// Usage (from the project root):
-//   dart run tool/generate_levels.dart
-//
-// Every level is deterministic: level N uses seed hash('arrowpuzzle', N).
-// If a generated layout hash collides with an earlier level, the salt is
-// bumped and generation retried, keeping output stable across machines.
-
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arrow_puzzle/features/game/logic/difficulty_config.dart';
 import 'package:arrow_puzzle/features/game/logic/generator/level_generator.dart';
-import 'package:arrow_puzzle/features/game/logic/generator/shapes.dart';
 
-const int maxLevel = 200;
-const int chapterSize = 20;
+const int defaultTargetLevels = 300;
 
 Future<void> main(List<String> args) async {
-  final count = args.isNotEmpty ? int.parse(args.first) : maxLevel;
+  final count = args.isNotEmpty ? int.parse(args.first) : defaultTargetLevels;
   final levelsDir = Directory('assets/levels');
-  final shapesDir = Directory('assets/shapes');
   levelsDir.createSync(recursive: true);
-  shapesDir.createSync(recursive: true);
 
-  // Ship each built-in shape as a JSON asset so new shapes can be added
-  // by dropping files into assets/shapes/ without touching code.
-  for (final shape in kBuiltinShapes) {
-    File('${shapesDir.path}/${shape.name}.json').writeAsStringSync(
-      const JsonEncoder.withIndent(' ').convert({
-        'name': shape.name,
-        'rows': shape.art,
-      }),
-    );
+  // Clean old level files
+  for (final entity in levelsDir.listSync()) {
+    if (entity is File && entity.path.endsWith('.json')) {
+      entity.deleteSync();
+    }
   }
 
   final generator = LevelGenerator();
   final seenHashes = <String, int>{};
   var failures = 0;
 
-  for (var id = 1; id <= count; id++) {
-    final chapter = (id - 1) ~/ chapterSize;
-    final shape = kBuiltinShapes[chapter % kBuiltinShapes.length];
+  stdout.writeln('Generating $count linear rectangular levels (1..$count)...');
 
+  for (var id = 1; id <= count; id++) {
     var saltBump = 0;
     GeneratedLevel result;
     while (true) {
       final salt = saltBump == 0 ? 'arrowescape' : 'arrowescape#$saltBump';
-      result = generator.generate(id, shape, salt: salt);
+      result = generator.generate(id, salt: salt);
       final clash = seenHashes[result.level.hash];
-      if (clash == null) break;
-      saltBump++;
-      if (saltBump > 20) {
-        throw StateError(
-          'Could not find unique layout for level $id (clash with $clash)',
-        );
+      if (clash == null) {
+        seenHashes[result.level.hash] = id;
+        break;
       }
+      saltBump++;
     }
 
-    seenHashes[result.level.hash] = id;
-    File('${levelsDir.path}/level_${id.toString().padLeft(3, '0')}.json')
-        .writeAsStringSync(
+    final m = result.metrics;
+    final file = File('${levelsDir.path}/level_${id.toString().padLeft(3, '0')}.json');
+    file.writeAsStringSync(
       const JsonEncoder.withIndent(' ').convert(result.level.toJson()),
     );
 
+    final isBoss = DifficultyConfig.isBossLevel(id);
+    final bossMark = isBoss ? ' [BOSS]' : '';
     stdout.writeln(
-      'Level $id (${shape.name}) ${result.level.board.rows}x'
-      '${result.level.board.cols}, ${result.level.arrowCount} arrows, '
-      'coverage ${(result.coverage * 100).toStringAsFixed(0)}%, '
-      'chain ${result.longestChain}, free ${result.freeAtStart}, '
-      'maxWave ${result.metrics.maxFreeWave}, avgFree ${result.metrics.avgFree}, '
-      'difficulty ${result.level.difficulty}, hash ${result.level.hash}',
+      'L${id.toString().padLeft(3, '0')}: N=${m.arrowCount.toString().padLeft(3)} '
+      'grid=${result.level.rows}x${result.level.cols} cov=${(m.coverage * 100).toStringAsFixed(1)}% '
+      'free0=${m.free0} maxFreeWave=${m.maxFreeWave} score=${m.difficultyScore.toStringAsFixed(1)}$bossMark',
     );
   }
 
-  // Manifest with chapter metadata for the level-select screen.
-  final chapters = <Map<String, dynamic>>[];
-  for (var c = 0; c * chapterSize < count; c++) {
-    final shape = kBuiltinShapes[c % kBuiltinShapes.length];
-    chapters.add({
-      'index': c,
-      'name': _chapterName(shape.name),
-      'shape': shape.name,
-      'firstLevel': c * chapterSize + 1,
-    });
-  }
-  File('${levelsDir.path}/manifest.json').writeAsStringSync(
-    const JsonEncoder.withIndent(' ').convert({
-      'count': count,
-      'seedScheme': 'fnv1a64("arrowpuzzle:<levelId>")',
-      'chapters': chapters,
-    }),
-  );
-
-  stdout.writeln('Done. $count levels generated, $failures failures.');
+  stdout.writeln('Done. Generated $count levels ($failures retries).');
 }
-
-String _chapterName(String shapeName) =>
-    '${shapeName[0].toUpperCase()}${shapeName.substring(1)} Shapes';

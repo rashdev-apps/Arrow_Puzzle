@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'core/providers.dart';
 import 'core/theme/app_theme.dart';
 import 'features/game/presentation/game_screen.dart';
-import 'features/levels/presentation/level_select_screen.dart';
+import 'features/home/presentation/home_screen.dart';
+import 'features/levels/presentation/level_map_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/settings/presentation/arrow_gallery_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
@@ -20,8 +21,12 @@ GoRouter createRouter({String initialLocation = '/splash'}) => GoRouter(
       builder: (context, state) => const SplashScreen(),
     ),
     GoRoute(
+      path: '/home',
+      builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
       path: '/levels',
-      builder: (context, state) => const LevelSelectScreen(),
+      builder: (context, state) => const LevelMapScreen(),
     ),
     GoRoute(
       path: '/game/:id',
@@ -60,7 +65,7 @@ GoRouter createRouter({String initialLocation = '/splash'}) => GoRouter(
         container.read(storageProvider).onboardingDone;
     final onOnboarding = state.matchedLocation == '/onboarding';
     if (!onboardingDone && !onOnboarding) return '/onboarding';
-    if (onboardingDone && onOnboarding) return '/levels';
+    if (onboardingDone && onOnboarding) return '/home';
     return null;
   },
 );

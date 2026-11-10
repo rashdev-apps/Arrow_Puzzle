@@ -22,17 +22,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     (
       'Arrow Escape',
       'Untangle the labyrinth',
-      'Every board is a dense maze of snake arrows hiding inside unique silhouettes. Find the path, unlock them in sequence, and clear the board.',
+      'Every board is a dense maze of snake arrows. Find the path, unlock them in sequence, and clear the board.',
     ),
     (
       'Tap to Slide',
-      'Follow the head',
-      'Tap an arrow and it slithers out the direction its head points. Watch its body bend and trace around turns like a snake.',
+      'Free path only',
+      'Tap an arrow to slide it out in the direction its head points. Make sure its path out of the maze is completely clear.',
     ),
     (
-      'Master the Chain',
-      'Mind your hearts',
-      'Blocked arrows cost a heart! Think ahead, spot the free arrows on the outside, and trigger satisfying cascade clears.',
+      'Mind Your Lives & Time',
+      'Escape before time runs out',
+      'Hitting a blocking arrow costs a heart! Think ahead, spot free outer arrows, and clear the board before the clock ticks down.',
     ),
   ];
 
@@ -44,7 +44,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _finish() {
     ref.read(storageProvider).onboardingDone = true;
-    context.go('/levels');
+    context.go('/home');
   }
 
   @override
