@@ -1,6 +1,6 @@
-import 'package:arrow_puzzle/features/game/logic/difficulty_config.dart';
-import 'package:arrow_puzzle/features/game/logic/generator/level_generator.dart';
-import 'package:arrow_puzzle/features/game/logic/solver.dart';
+import 'package:arrow_puzzle/engine/difficulty_config.dart';
+import 'package:arrow_puzzle/engine/generator/level_generator.dart';
+import 'package:arrow_puzzle/engine/solver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -10,10 +10,11 @@ void main() {
   group('DifficultyConfig', () {
     test('arrowCount curve is monotonically increasing', () {
       expect(DifficultyConfig.arrowCount(1), 4);
-      expect(DifficultyConfig.arrowCount(2), 8);
-      expect(DifficultyConfig.arrowCount(3), 12);
-      expect(DifficultyConfig.arrowCount(4), 16);
-      expect(DifficultyConfig.arrowCount(5), 20);
+      expect(DifficultyConfig.arrowCount(2), 6);
+      expect(DifficultyConfig.arrowCount(3), 8);
+      expect(DifficultyConfig.arrowCount(5), 12);
+      expect(DifficultyConfig.arrowCount(8), 16);
+      expect(DifficultyConfig.arrowCount(12), 24);
 
       // Monotonic baseline progression
       for (var l = 1; l < 100; l++) {
@@ -34,18 +35,18 @@ void main() {
       for (final id in [1, 5, 10, 25]) {
         final a = generator.generate(id);
         final b = generator.generate(id);
-        expect(a.level.hash, b.level.hash);
-        expect(a.level.board.arrows, b.level.board.arrows);
+        expect(a.seed, b.seed);
+        expect(a.board.arrows, b.board.arrows);
       }
     });
 
-    test('produces solvable boards on rectangular grids', () {
+    test('produces solvable boards on irregular silhouettes', () {
       for (final id in [1, 2, 5, 10]) {
-        final result = generator.generate(id);
-        final board = result.level.board;
-        expect(result.solutionOrder, hasLength(board.arrows.length));
-        expect(solver.solvableByGreedy(board), isTrue);
-        expect(result.coverage, greaterThanOrEqualTo(0.80));
+        final level = generator.generate(id);
+        final board = level.board;
+        expect(level.solution, hasLength(board.arrows.length));
+        expect(solver.isSolvable(board), isTrue);
+        expect(board.coverage, greaterThanOrEqualTo(0.80));
       }
     });
   });

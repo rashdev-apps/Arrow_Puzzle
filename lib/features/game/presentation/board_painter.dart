@@ -306,8 +306,9 @@ class BoardPainter extends CustomPainter {
   }
 
   /// Single standardized function to draw arrowheads across all render states.
-  /// Computes angle solely from atan2(tip.dy - prev.dy, tip.dx - prev.dx).
-  /// Triangle is centered on line axis, pointing along direction, base perpendicular.
+  /// Angle = atan2 of the LAST segment only;
+  /// Triangle length ≈ 3.0×stroke, width ≈ 3.2×stroke, centered on axis, base perpendicular to line;
+  /// Stroke ends exactly at triangle base.
   static void drawArrowHead(
     Canvas canvas,
     Offset tip,
@@ -318,8 +319,8 @@ class BoardPainter extends CustomPainter {
     final diff = tip - prev;
     final angle = math.atan2(diff.dy, diff.dx);
 
-    final headLen = strokeW * 2.2;
-    final halfW = strokeW * 1.35;
+    final headLen = strokeW * 3.0;
+    final halfW = (strokeW * 3.2) / 2.0;
 
     final cosA = math.cos(angle);
     final sinA = math.sin(angle);
